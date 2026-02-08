@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.0.1
+// @version      v1.0.2
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -46,8 +46,11 @@ const targetState = {
     grid: null,
     message: null,
     calledFragments: new Set(),
+    calledExactNames: new Set(),
     calledBy: new Map(),
+    calledByExactName: new Map(),
     selfCalledFragments: new Set(),
+    selfCalledExactNames: new Set(),
     callEntries: [],
     parsedMessages: new Map(),
     lastKnownStates: new Map(),
@@ -689,6 +692,13 @@ const renderTargetCard = (target) => {
 };
 
 const isTargetCalled = (targetName) => {
+    if (!targetName) {
+        return false;
+    }
+    const lowerName = targetName.toLowerCase();
+    if (targetState.calledExactNames.has(lowerName)) {
+        return true;
+    }
     return startsWithAnyFragment(targetName, targetState.calledFragments);
 };
 
@@ -697,6 +707,9 @@ const getTargetCaller = (targetName) => {
         return null;
     }
     const lowerName = targetName.toLowerCase();
+    if (targetState.calledByExactName.has(lowerName)) {
+        return targetState.calledByExactName.get(lowerName) ?? null;
+    }
     for (const fragment of targetState.calledFragments) {
         if (lowerName.startsWith(fragment)) {
             return targetState.calledBy.get(fragment) ?? null;
@@ -706,6 +719,13 @@ const getTargetCaller = (targetName) => {
 };
 
 const isTargetCalledBySelf = (targetName) => {
+    if (!targetName) {
+        return false;
+    }
+    const lowerName = targetName.toLowerCase();
+    if (targetState.selfCalledExactNames.has(lowerName)) {
+        return true;
+    }
     return startsWithAnyFragment(targetName, targetState.selfCalledFragments);
 };
 
@@ -880,14 +900,6 @@ const extractCallEntry = (message) => {
         return null;
     }
     const fragment = match[1].toLowerCase();
-    if (fragment.length < MIN_CALL_FRAGMENT_LENGTH) {
-        logDebug('Skipping call extraction: fragment too short.', {
-            fragment,
-            fragmentLength: fragment.length,
-            minLength: MIN_CALL_FRAGMENT_LENGTH,
-        });
-        return null;
-    }
     const entry = {
         fragment,
         callerName,
@@ -900,25 +912,41 @@ const extractCallEntry = (message) => {
 
 const rebuildCalledState = () => {
     const fragments = new Set();
+    const exactNames = new Set();
     const calledBy = new Map();
+    const calledByExactName = new Map();
     const selfFragments = new Set();
+    const selfExactNames = new Set();
     targetState.callEntries.forEach((entry) => {
+        exactNames.add(entry.fragment);
         if (entry.isSelf) {
-            selfFragments.add(entry.fragment);
+            selfExactNames.add(entry.fragment);
+            if (entry.fragment.length >= MIN_CALL_FRAGMENT_LENGTH) {
+                selfFragments.add(entry.fragment);
+            }
             return;
         }
-        fragments.add(entry.fragment);
+        if (entry.fragment.length >= MIN_CALL_FRAGMENT_LENGTH) {
+            fragments.add(entry.fragment);
+        }
         if (entry.callerName) {
+            calledByExactName.set(entry.fragment, entry.callerName);
             calledBy.set(entry.fragment, entry.callerName);
         }
     });
     targetState.calledFragments = fragments;
+    targetState.calledExactNames = exactNames;
     targetState.calledBy = calledBy;
+    targetState.calledByExactName = calledByExactName;
     targetState.selfCalledFragments = selfFragments;
+    targetState.selfCalledExactNames = selfExactNames;
     logDebug('Rebuilt called-state indexes.', {
         calledFragments: [...fragments],
+        calledExactNames: [...exactNames],
         selfCalledFragments: [...selfFragments],
+        selfCalledExactNames: [...selfExactNames],
         calledBy: [...calledBy.entries()],
+        calledByExactName: [...calledByExactName.entries()],
     });
 };
 
@@ -981,9 +1009,15 @@ const removeCallsForTargetName = (targetName) => {
     }
     const lowerName = targetName.toLowerCase();
     const originalLength = targetState.callEntries.length;
-    targetState.callEntries = targetState.callEntries.filter(
-        (entry) => !lowerName.startsWith(entry.fragment)
-    );
+    targetState.callEntries = targetState.callEntries.filter((entry) => {
+        if (lowerName === entry.fragment) {
+            return false;
+        }
+        if (entry.fragment.length < MIN_CALL_FRAGMENT_LENGTH) {
+            return true;
+        }
+        return !lowerName.startsWith(entry.fragment);
+    });
     const removed = targetState.callEntries.length !== originalLength;
     if (removed) {
         logDebug('Removed call entries for target fulfillment target.', {
