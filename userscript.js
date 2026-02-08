@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:08:00
+// @version      2026-02-08 12:09:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -9,13 +9,12 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM.xmlHttpRequest
+// @connect      api.torn.com
+// @connect      ffscouter.com
 // ==/UserScript==
 
-// TODO
-// Make it compatible with TornPDA
-
 // Feel free to modify these values
-const FFSCOUTER_API_KEY = '';
 const MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
@@ -58,6 +57,9 @@ const chatState = {
 };
 const statsCache = new Map();
 const isFunction = (value) => typeof value === 'function';
+const getModernGmApi = () => globalThis.GM ?? null;
+const getTornPdaHttpGet = () =>
+    globalThis.PDA_httpGet ?? globalThis.unsafeWindow?.PDA_httpGet ?? null;
 
 const safeGetValue = (key, fallback = '') => {
     if (!isFunction(globalThis.GM_getValue)) {
@@ -1011,7 +1013,7 @@ const getInitialApiKey = () => {
         return storedKey;
     }
 
-    return (FFSCOUTER_API_KEY || '').trim();
+    return '';
 };
 
 const renderApiKeyMessage = (message, initialValue = '') => {
@@ -1063,39 +1065,56 @@ const renderApiKeyMessage = (message, initialValue = '') => {
 };
 
 const requestJson = (url) => {
-    if (!isFunction(globalThis.GM_xmlhttpRequest)) {
-        return fetch(url, { method: 'GET' }).then((response) => {
-            if (!response.ok) {
-                throw new Error(`Request failed with status ${response.status}`);
-            }
-            return response.json();
+    const requestFn = isFunction(globalThis.GM_xmlhttpRequest)
+        ? globalThis.GM_xmlhttpRequest
+        : isFunction(getModernGmApi()?.xmlHttpRequest)
+          ? getModernGmApi().xmlHttpRequest
+          : null;
+
+    if (requestFn) {
+        return new Promise((resolve, reject) => {
+            requestFn({
+                method: 'GET',
+                url,
+                timeout: REQUEST_TIMEOUT_MS,
+                onload: (response) => {
+                    if (response.status < 200 || response.status >= 300) {
+                        reject(new Error(`Request failed with status ${response.status}`));
+                        return;
+                    }
+
+                    try {
+                        resolve(JSON.parse(response.responseText));
+                    } catch (error) {
+                        reject(error);
+                    }
+                },
+                onerror: () => {
+                    reject(new Error('Network request failed.'));
+                },
+                ontimeout: () => {
+                    reject(new Error('Request timed out.'));
+                },
+            });
         });
     }
 
-    return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
-            method: 'GET',
-            url,
-            timeout: REQUEST_TIMEOUT_MS,
-            onload: (response) => {
-                if (response.status < 200 || response.status >= 300) {
-                    reject(new Error(`Request failed with status ${response.status}`));
-                    return;
-                }
-
-                try {
-                    resolve(JSON.parse(response.responseText));
-                } catch (error) {
-                    reject(error);
-                }
-            },
-            onerror: () => {
-                reject(new Error('Network request failed.'));
-            },
-            ontimeout: () => {
-                reject(new Error('Request timed out.'));
-            },
+    const tornPdaHttpGet = getTornPdaHttpGet();
+    if (isFunction(tornPdaHttpGet)) {
+        return Promise.resolve(tornPdaHttpGet(url)).then((response) => {
+            const text = typeof response === 'string' ? response : response?.responseText;
+            if (!text) {
+                throw new Error('TornPDA request returned an empty response.');
+            }
+            return JSON.parse(text);
         });
+    }
+
+    return fetch(url, { method: 'GET' }).then((response) => {
+        if (!response.ok) {
+            throw new Error(`Request failed with status ${response.status}`);
+        }
+        return response.json();
     });
 };
 
