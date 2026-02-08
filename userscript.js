@@ -19,6 +19,7 @@ const MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
 const TARGET_REFRESH_INTERVAL_MS = 15000;
+const MIN_CALL_FRAGMENT_LENGTH = 4;
 
 // /////////////////////////////
 //
@@ -753,27 +754,59 @@ const handleTargetStateTransition = (targetId, targetName, effectiveState) => {
 
 const normalizeMessageKey = (message) => (message ?? '').trim().toLowerCase();
 
+const parseChatMessageParts = (message) => {
+    const text = (message ?? '').replace(/\r/g, '').trim();
+    if (!text) {
+        return null;
+    }
+
+    const lines = text
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    if (lines.length === 0) {
+        return null;
+    }
+
+    const callerMatch = lines[0].match(/^([^:]+):$/);
+    if (callerMatch && lines.length >= 2) {
+        return {
+            callerName: callerMatch[1].trim(),
+            messagePart: lines[1],
+            isSelf: false,
+        };
+    }
+
+    return {
+        callerName: '',
+        messagePart: lines[0],
+        isSelf: true,
+    };
+};
+
 const extractCallEntry = (message) => {
     if (!message) {
         return null;
     }
-    const separatorIndex = message.indexOf(':\n');
-    const messagePart =
-        separatorIndex >= 0 ? message.slice(separatorIndex + 2).trim() : message.trim();
-    const callerName =
-        separatorIndex >= 0 ? message.slice(0, separatorIndex).trim() : '';
-    const match = messagePart.match(/^([a-z0-9]+)(?:\s+in\s+\d+)?$/i);
+
+    const messageParts = parseChatMessageParts(message);
+    if (!messageParts) {
+        return null;
+    }
+
+    const { callerName, messagePart, isSelf } = messageParts;
+    const match = messagePart.match(/^([a-z0-9]+)(?:\s+in\s+\d+)?(?:[.!?,])?$/i);
     if (!match) {
         return null;
     }
     const fragment = match[1].toLowerCase();
-    if (fragment.length < 5) {
+    if (fragment.length < MIN_CALL_FRAGMENT_LENGTH) {
         return null;
     }
     return {
         fragment,
         callerName,
-        isSelf: separatorIndex < 0,
+        isSelf,
         messageKey: normalizeMessageKey(`${callerName}|${messagePart}`),
     };
 };
