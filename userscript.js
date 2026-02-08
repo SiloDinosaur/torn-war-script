@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:11:00
+// @version      2026-02-08 12:12:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -1184,7 +1184,6 @@ const requestJson = (url) => {
             });
     }
 
-    logWarn('GM request APIs not available, falling back to fetch.', { url });
     return fetch(url, { method: 'GET' })
         .then((response) => {
             if (!response.ok) {
