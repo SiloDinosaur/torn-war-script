@@ -379,6 +379,19 @@ const getFactionChatTextarea = () => {
     return factionChat?.querySelector('[class^="textarea__"]') ?? null;
 };
 
+const startsWithAnyFragment = (targetName, fragments) => {
+    if (!targetName) {
+        return false;
+    }
+    const lowerName = targetName.toLowerCase();
+    for (const fragment of fragments) {
+        if (lowerName.startsWith(fragment)) {
+            return true;
+        }
+    }
+    return false;
+};
+
 const dispatchEnterKey = (element) => {
     if (!element) {
         return;
@@ -525,6 +538,13 @@ const getEffectiveState = (target) => {
     return remaining === 0 ? 'Okay' : rawState;
 };
 
+const getEffectiveDescription = (target, effectiveState) => {
+    if (effectiveState === 'Okay' && target?.status?.state === 'Hospital') {
+        return '';
+    }
+    return target?.status?.description ?? '';
+};
+
 const formatCallMessage = (target) => {
     const targetName = target?.name ?? '';
     if (!targetName) {
@@ -565,15 +585,9 @@ const updateTargetCard = (target, cardData) => {
     }
 
     cardData.targetData = target;
-    const rawState = target?.status?.state ?? 'Unknown';
-    const rawDescription = target?.status?.description ?? '';
-    const { label: hospitalLabel, remainingSeconds } = getHospitalLabel(
-        target?.status?.until
-    );
-    const shouldTreatAsOkay =
-        rawState === 'Hospital' && remainingSeconds != null && remainingSeconds === 0;
-    const effectiveState = shouldTreatAsOkay ? 'Okay' : rawState;
-    const effectiveDescription = shouldTreatAsOkay ? '' : rawDescription;
+    const effectiveState = getEffectiveState(target);
+    const effectiveDescription = getEffectiveDescription(target, effectiveState);
+    const { label: hospitalLabel } = getHospitalLabel(target?.status?.until);
     const stateClass = (effectiveState ?? 'unknown').toLowerCase();
     cardData.card.className = `war-target-card state-${stateClass}`;
     const targetId = String(target?.id ?? '');
@@ -675,16 +689,7 @@ const renderTargetCard = (target) => {
 };
 
 const isTargetCalled = (targetName) => {
-    if (!targetName) {
-        return false;
-    }
-    const lowerName = targetName.toLowerCase();
-    for (const fragment of targetState.calledFragments) {
-        if (lowerName.startsWith(fragment)) {
-            return true;
-        }
-    }
-    return false;
+    return startsWithAnyFragment(targetName, targetState.calledFragments);
 };
 
 const getTargetCaller = (targetName) => {
@@ -701,16 +706,7 @@ const getTargetCaller = (targetName) => {
 };
 
 const isTargetCalledBySelf = (targetName) => {
-    if (!targetName) {
-        return false;
-    }
-    const lowerName = targetName.toLowerCase();
-    for (const fragment of targetState.selfCalledFragments) {
-        if (lowerName.startsWith(fragment)) {
-            return true;
-        }
-    }
-    return false;
+    return startsWithAnyFragment(targetName, targetState.selfCalledFragments);
 };
 
 const formatCallerLabel = (name) => {
