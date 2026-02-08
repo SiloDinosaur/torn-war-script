@@ -358,7 +358,7 @@ const findFactionChatElement = (node) => {
 
 const getFactionChatList = () => {
     const factionChat = document.querySelector('[id^="faction-"]');
-    return factionChat?.querySelector('[class^="list__"]') ?? null;
+    return factionChat?.querySelector('[class^="scrollWrapper__"]') ?? null;
 };
 
 const getFactionChatTextarea = () => {
