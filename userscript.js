@@ -577,10 +577,6 @@ const getStatusLabel = ({ state, description, hospitalLabel }) => {
         return `${isAbroadHospital ? 'Hosp' : 'Hospital'} ${hospitalLabel}`;
     }
 
-    if (state === 'Abroad' && description.startsWith('In ')) {
-        return description.replace('In ', 'In ');
-    }
-
     if (state === 'Traveling' && description.startsWith('Traveling')) {
         return description;
     }
@@ -1231,15 +1227,6 @@ const setStoredApiKey = (key) => {
     safeSetValue(FFSCOUTER_API_KEY_STORAGE_KEY, key);
 };
 
-const getInitialApiKey = () => {
-    const storedKey = getStoredApiKey();
-    if (storedKey) {
-        return storedKey;
-    }
-
-    return '';
-};
-
 const renderApiKeyMessage = (message, initialValue = '') => {
     if (!ensureTargetLayout()) {
         return;
@@ -1629,7 +1616,7 @@ function renderNewElements() {
             setTimeout(initialize, 500);
             return;
         }
-        verifyApiKey(getInitialApiKey());
+        verifyApiKey(getStoredApiKey());
     };
 
     setTimeout(initialize, 1000);
