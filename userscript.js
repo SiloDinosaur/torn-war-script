@@ -122,6 +122,12 @@ const getAvailabilityStatus = (member) => {
 const isFederalTarget = (target) => target?.status?.state === 'Federal';
 const isTravelingTarget = (target) => target?.status?.state === 'Traveling';
 const isAbroadTarget = (target) => target?.status?.state === 'Abroad';
+const isAbroadHospitalTarget = (target) => {
+    if (target?.status?.state !== 'Hospital') {
+        return false;
+    }
+    return /In\s+a\s+.+\s+hospital/i.test(target?.status?.description ?? '');
+};
 
 const ensureTargetStyles = () => {
     if (document.getElementById(TARGET_STYLE_ID)) {
@@ -1109,7 +1115,9 @@ const renderTargetGrid = (targets) => {
 
     const visibleTargets = targets.filter(
         (target) =>
-            Number.isFinite(target?.fair_fight) && target.fair_fight <= MAX_FAIR_FIGHT
+            Number.isFinite(target?.fair_fight) &&
+            target.fair_fight <= MAX_FAIR_FIGHT &&
+            !isAbroadHospitalTarget(target)
     );
     const sortedTargets = visibleTargets
         .map((target, index) => ({ target, index }))
