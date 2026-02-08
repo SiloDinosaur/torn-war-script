@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:12:00
+// @version      2026-02-08 12:16:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -393,7 +393,7 @@ const collectLastMessages = (listElement) => {
     if (!listElement) {
         return [];
     }
-    return [...listElement.children]
+    return [...listElement.children[0].children]
         .slice(-LAST_N_MESSAGES_TO_CHECK_FOR_DIBS)
         .map((node) => node.innerText);
 };
