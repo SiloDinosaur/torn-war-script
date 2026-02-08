@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         War targets
+// @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-01
+// @version      2026-02-08
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
