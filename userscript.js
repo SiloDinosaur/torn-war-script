@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.1.0
+// @version      v1.1.1
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -575,10 +575,6 @@ const getStatusLabel = ({ state, description, hospitalLabel }) => {
     if (state === 'Hospital' && hospitalLabel) {
         const isAbroadHospital = /In\s+a\s+.+\s+hospital/i.test(description);
         return `${isAbroadHospital ? 'Hosp' : 'Hospital'} ${hospitalLabel}`;
-    }
-
-    if (state === 'Abroad' && description.startsWith('In ')) {
-        return description.replace('In ', 'In ');
     }
 
     if (state === 'Traveling' && description.startsWith('Traveling')) {
@@ -1231,15 +1227,6 @@ const setStoredApiKey = (key) => {
     safeSetValue(FFSCOUTER_API_KEY_STORAGE_KEY, key);
 };
 
-const getInitialApiKey = () => {
-    const storedKey = getStoredApiKey();
-    if (storedKey) {
-        return storedKey;
-    }
-
-    return '';
-};
-
 const renderApiKeyMessage = (message, initialValue = '') => {
     if (!ensureTargetLayout()) {
         return;
@@ -1629,7 +1616,7 @@ function renderNewElements() {
             setTimeout(initialize, 500);
             return;
         }
-        verifyApiKey(getInitialApiKey());
+        verifyApiKey(getStoredApiKey());
     };
 
     setTimeout(initialize, 1000);
