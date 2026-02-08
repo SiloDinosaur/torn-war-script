@@ -10,7 +10,7 @@
 // ==/UserScript==
 
 // TODO
-// Make it compatible with TornPDA //dummy commit
+// Make it compatible with TornPDA
 
 // Feel free to modify these values
 const FFSCOUTER_API_KEY = 'my dummy value';
