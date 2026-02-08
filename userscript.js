@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:10:00
+// @version      2026-02-08 12:11:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -57,6 +57,10 @@ const chatState = {
     listElement: null,
 };
 const statsCache = new Map();
+const LOG_PREFIX = '[Torn War Targets]';
+const logInfo = (...args) => console.log(LOG_PREFIX, ...args);
+const logWarn = (...args) => console.warn(LOG_PREFIX, ...args);
+const logError = (...args) => console.error(LOG_PREFIX, ...args);
 const isFunction = (value) => typeof value === 'function';
 const getModernGmApi = () => globalThis.GM ?? null;
 const getTornPdaHttpGet = () =>
@@ -66,14 +70,16 @@ const safeGetValue = (key, fallback = '') => {
     if (!isFunction(globalThis.GM_getValue)) {
         try {
             return globalThis.localStorage?.getItem(key) ?? fallback;
-        } catch (_error) {
+        } catch (error) {
+            logWarn('Failed to read from localStorage.', { key, error });
             return fallback;
         }
     }
 
     try {
         return GM_getValue(key, fallback);
-    } catch (_error) {
+    } catch (error) {
+        logWarn('GM_getValue failed.', { key, error });
         return fallback;
     }
 };
@@ -82,16 +88,16 @@ const safeSetValue = (key, value) => {
     if (!isFunction(globalThis.GM_setValue)) {
         try {
             globalThis.localStorage?.setItem(key, value);
-        } catch (_error) {
-            // Ignore storage failures.
+        } catch (error) {
+            logWarn('Failed to write to localStorage.', { key, error });
         }
         return;
     }
 
     try {
         GM_setValue(key, value);
-    } catch (_error) {
-        // Ignore storage failures.
+    } catch (error) {
+        logWarn('GM_setValue failed.', { key, error });
     }
 };
 
@@ -419,7 +425,7 @@ const observeChatRoot = (chatRoot) => {
         for (const mutation of mutations) {
             for (const node of mutation.addedNodes) {
                 if (findFactionChatElement(node)) {
-                    console.log('Faction chat opened!');
+                    logInfo('Faction chat opened.');
                     const listElement = getFactionChatList();
                     observeChatList(listElement);
                     return;
@@ -435,6 +441,7 @@ const observeChatRoot = (chatRoot) => {
 const startChatRootObserver = () => {
     const chatRoot = document.getElementById('chatRoot');
     if (!chatRoot) {
+        logWarn('Chat root not found yet.');
         return false;
     }
 
@@ -452,6 +459,11 @@ const waitForChatRoot = () => {
             bodyObserver.disconnect();
         }
     });
+
+    if (!document.body) {
+        logError('document.body is unavailable; cannot observe chat root.');
+        return;
+    }
 
     bodyObserver.observe(document.body, { childList: true, subtree: true });
 };
@@ -606,11 +618,17 @@ const renderTargetCard = (target) => {
         event.stopPropagation();
         const textarea = getFactionChatTextarea();
         if (!textarea) {
+            logWarn('Cannot send call message: faction chat textarea not found.', {
+                targetName: cardData?.targetData?.name,
+            });
             window.alert('Open the faction chat first.');
             return;
         }
         const message = formatCallMessage(cardData?.targetData);
         if (!message) {
+            logWarn('Cannot send call message: empty message after formatting.', {
+                target: cardData?.targetData,
+            });
             return;
         }
         textarea.value = message;
@@ -925,6 +943,7 @@ const ensureTargetLayout = () => {
 
 const renderTargetGrid = (targets) => {
     if (!ensureTargetLayout()) {
+        logWarn('Target layout is unavailable; cannot render target grid.');
         return;
     }
 
@@ -995,6 +1014,7 @@ const renderTargetGrid = (targets) => {
     sortedTargets.forEach((target) => {
         const targetId = target?.id ?? '';
         if (!targetId) {
+            logWarn('Skipping target without id.', { target });
             return;
         }
         seenIds.add(String(targetId));
@@ -1020,6 +1040,9 @@ const renderTargetGrid = (targets) => {
 
 const setContentMessage = (message) => {
     if (!ensureTargetLayout()) {
+        logWarn('Target layout is unavailable; cannot set content message.', {
+            message,
+        });
         return;
     }
     targetState.message.textContent = message;
@@ -1112,6 +1135,11 @@ const requestJson = (url) => {
                 timeout: REQUEST_TIMEOUT_MS,
                 onload: (response) => {
                     if (response.status < 200 || response.status >= 300) {
+                        logError('HTTP request failed.', {
+                            url,
+                            status: response.status,
+                            responseText: response.responseText,
+                        });
                         reject(new Error(`Request failed with status ${response.status}`));
                         return;
                     }
@@ -1119,13 +1147,20 @@ const requestJson = (url) => {
                     try {
                         resolve(JSON.parse(response.responseText));
                     } catch (error) {
+                        logError('Failed to parse JSON response.', {
+                            url,
+                            responseText: response.responseText,
+                            error,
+                        });
                         reject(error);
                     }
                 },
-                onerror: () => {
+                onerror: (error) => {
+                    logError('Network request failed.', { url, error });
                     reject(new Error('Network request failed.'));
                 },
                 ontimeout: () => {
+                    logError('Network request timed out.', { url, timeoutMs: REQUEST_TIMEOUT_MS });
                     reject(new Error('Request timed out.'));
                 },
             });
@@ -1134,21 +1169,34 @@ const requestJson = (url) => {
 
     const tornPdaHttpGet = getTornPdaHttpGet();
     if (isFunction(tornPdaHttpGet)) {
-        return Promise.resolve(tornPdaHttpGet(url)).then((response) => {
-            const text = typeof response === 'string' ? response : response?.responseText;
-            if (!text) {
-                throw new Error('TornPDA request returned an empty response.');
-            }
-            return JSON.parse(text);
-        });
+        return Promise.resolve(tornPdaHttpGet(url))
+            .then((response) => {
+                const text = typeof response === 'string' ? response : response?.responseText;
+                if (!text) {
+                    logError('TornPDA request returned an empty response.', { url, response });
+                    throw new Error('TornPDA request returned an empty response.');
+                }
+                return JSON.parse(text);
+            })
+            .catch((error) => {
+                logError('TornPDA request failed.', { url, error });
+                throw error;
+            });
     }
 
-    return fetch(url, { method: 'GET' }).then((response) => {
-        if (!response.ok) {
-            throw new Error(`Request failed with status ${response.status}`);
-        }
-        return response.json();
-    });
+    logWarn('GM request APIs not available, falling back to fetch.', { url });
+    return fetch(url, { method: 'GET' })
+        .then((response) => {
+            if (!response.ok) {
+                logError('Fetch request failed.', { url, status: response.status });
+                throw new Error(`Request failed with status ${response.status}`);
+            }
+            return response.json();
+        })
+        .catch((error) => {
+            logError('Fetch request failed unexpectedly.', { url, error });
+            throw error;
+        });
 };
 
 const fetchFactionInfo = async (key) => {
@@ -1159,6 +1207,7 @@ const fetchFactionInfo = async (key) => {
     const name = data?.basic?.name;
 
     if (!id || !name) {
+        logError('Faction info response is missing required fields.', { data });
         throw new Error('Unable to read faction information.');
     }
 
@@ -1167,6 +1216,7 @@ const fetchFactionInfo = async (key) => {
 
 const fetchEnemyFaction = async (key, currentFactionId) => {
     if (!currentFactionId) {
+        logError('Missing current faction id while fetching enemy faction.');
         throw new Error('Missing faction id.');
     }
 
@@ -1187,6 +1237,11 @@ const fetchEnemyFaction = async (key, currentFactionId) => {
     );
 
     if (!enemyFaction?.id) {
+        logError('Unable to resolve enemy faction from ranked wars response.', {
+            currentFactionId,
+            rankedWars,
+            activeWar,
+        });
         throw new Error('Unable to resolve enemy faction.');
     }
 
@@ -1195,6 +1250,7 @@ const fetchEnemyFaction = async (key, currentFactionId) => {
 
 const fetchEnemyTargets = async (key, enemyId, { useScouter = true } = {}) => {
     if (!enemyId) {
+        logWarn('Enemy faction id missing; skipping target fetch.');
         return [];
     }
 
@@ -1211,6 +1267,7 @@ const fetchEnemyTargets = async (key, enemyId, { useScouter = true } = {}) => {
         .filter((id) => Boolean(id));
 
     if (memberIds.length === 0) {
+        logWarn('No enemy members found.', { enemyId });
         return [];
     }
 
@@ -1225,6 +1282,12 @@ const fetchEnemyTargets = async (key, enemyId, { useScouter = true } = {}) => {
                 statsCache.set(stat.player_id, stat);
             }
         });
+        if (statsCache.size === 0) {
+            logWarn('FFScouter returned no stats for requested member ids.', {
+                enemyId,
+                memberCount: memberIds.length,
+            });
+        }
     }
 
     return rawMembers
@@ -1298,7 +1361,8 @@ const startAutoRefresh = (key) => {
     }
 
     headerState.refreshTimer = setInterval(() => {
-        loadTargets(key, { useScouter: false, showLoading: false }).catch(() => {
+        loadTargets(key, { useScouter: false, showLoading: false }).catch((error) => {
+            logError('Auto-refresh failed.', { error });
             setContentMessage('Unable to refresh targets.');
         });
     }, TARGET_REFRESH_INTERVAL_MS);
@@ -1328,7 +1392,8 @@ const verifyApiKey = (key) => {
                 startLastUpdatedTimer();
             });
         })
-        .catch(() => {
+        .catch((error) => {
+            logError('API key validation failed.', { key, error });
             renderApiKeyMessage(
                 'Unable to validate API key. Please confirm your key and try again.',
                 key
@@ -1338,12 +1403,16 @@ const verifyApiKey = (key) => {
 
 const getTargetContainer = () => {
     const factionMain = document.getElementById('faction-main');
+    if (!factionMain) {
+        logWarn('Faction main container not found yet.');
+    }
     return factionMain?.children?.[0]?.children?.[0]?.children?.[0] ?? null;
 };
 
 function renderNewElements() {
     const targetDiv = getTargetContainer();
     if (!targetDiv) {
+        logWarn('Target container not available; delaying initialization.');
         return false;
     }
 
@@ -1389,6 +1458,7 @@ function renderNewElements() {
 
     const initialize = () => {
         if (!renderNewElements()) {
+            logWarn('Render preconditions not met; retrying initialization in 500ms.');
             setTimeout(initialize, 500);
             return;
         }
