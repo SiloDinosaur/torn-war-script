@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:08:00
+// @version      2026-02-08 12:09:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -15,7 +15,6 @@
 // ==/UserScript==
 
 // Feel free to modify these values
-const FFSCOUTER_API_KEY = '';
 const MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
@@ -1014,7 +1013,7 @@ const getInitialApiKey = () => {
         return storedKey;
     }
 
-    return (FFSCOUTER_API_KEY || '').trim();
+    return '';
 };
 
 const renderApiKeyMessage = (message, initialValue = '') => {
