@@ -57,6 +57,41 @@ const chatState = {
     listElement: null,
 };
 const statsCache = new Map();
+const isFunction = (value) => typeof value === 'function';
+
+const safeGetValue = (key, fallback = '') => {
+    if (!isFunction(globalThis.GM_getValue)) {
+        try {
+            return globalThis.localStorage?.getItem(key) ?? fallback;
+        } catch (_error) {
+            return fallback;
+        }
+    }
+
+    try {
+        return GM_getValue(key, fallback);
+    } catch (_error) {
+        return fallback;
+    }
+};
+
+const safeSetValue = (key, value) => {
+    if (!isFunction(globalThis.GM_setValue)) {
+        try {
+            globalThis.localStorage?.setItem(key, value);
+        } catch (_error) {
+            // Ignore storage failures.
+        }
+        return;
+    }
+
+    try {
+        GM_setValue(key, value);
+    } catch (_error) {
+        // Ignore storage failures.
+    }
+};
+
 const getAvailabilityStatus = (member) => {
     if (!member) {
         return 'Offline';
@@ -958,7 +993,7 @@ const setContentMessage = (message) => {
 };
 
 const getStoredApiKey = () => {
-    const storedKey = GM_getValue(FFSCOUTER_API_KEY_STORAGE_KEY, '');
+    const storedKey = safeGetValue(FFSCOUTER_API_KEY_STORAGE_KEY, '');
     if (typeof storedKey === 'string') {
         return storedKey.trim();
     }
@@ -967,7 +1002,7 @@ const getStoredApiKey = () => {
 };
 
 const setStoredApiKey = (key) => {
-    GM_setValue(FFSCOUTER_API_KEY_STORAGE_KEY, key);
+    safeSetValue(FFSCOUTER_API_KEY_STORAGE_KEY, key);
 };
 
 const getInitialApiKey = () => {
@@ -1027,8 +1062,17 @@ const renderApiKeyMessage = (message, initialValue = '') => {
     targetState.grid.style.display = 'none';
 };
 
-const requestJson = (url) =>
-    new Promise((resolve, reject) => {
+const requestJson = (url) => {
+    if (!isFunction(globalThis.GM_xmlhttpRequest)) {
+        return fetch(url, { method: 'GET' }).then((response) => {
+            if (!response.ok) {
+                throw new Error(`Request failed with status ${response.status}`);
+            }
+            return response.json();
+        });
+    }
+
+    return new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
             method: 'GET',
             url,
@@ -1053,6 +1097,7 @@ const requestJson = (url) =>
             },
         });
     });
+};
 
 const fetchFactionInfo = async (key) => {
     const data = await requestJson(
@@ -1244,7 +1289,7 @@ const getTargetContainer = () => {
     return factionMain?.children?.[0]?.children?.[0]?.children?.[0] ?? null;
 };
 
-async function renderNewElements() {
+function renderNewElements() {
     const targetDiv = getTargetContainer();
     if (!targetDiv) {
         return false;
