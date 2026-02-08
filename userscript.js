@@ -33,6 +33,7 @@ const CONTENT_ELEMENT_ID = 'war-tagets-content';
 const TARGET_STYLE_ID = 'war-targets-style';
 const CALL_FULFILLMENT_TIMEOUT_MS = CALL_FULFILLMENT_TIMEOUT_MINUTES * 60 * 1000;
 const LAST_UPDATED_INTERVAL_MS = 1000;
+const REQUEST_TIMEOUT_MS = 10000;
 const FACTION_CHAT_ID_PATTERN = /^faction-\d+$/;
 const headerState = {
     lastUpdatedAt: null,
@@ -1031,6 +1032,7 @@ const requestJson = (url) =>
         GM_xmlhttpRequest({
             method: 'GET',
             url,
+            timeout: REQUEST_TIMEOUT_MS,
             onload: (response) => {
                 if (response.status < 200 || response.status >= 300) {
                     reject(new Error(`Request failed with status ${response.status}`));
@@ -1045,6 +1047,9 @@ const requestJson = (url) =>
             },
             onerror: () => {
                 reject(new Error('Network request failed.'));
+            },
+            ontimeout: () => {
+                reject(new Error('Request timed out.'));
             },
         });
     });
@@ -1211,6 +1216,8 @@ const verifyApiKey = (key) => {
         return;
     }
 
+    setContentMessage('Validating API key...');
+
     requestJson(
         `https://ffscouter.com/api/v1/check-key?key=${encodeURIComponent(key)}`
     )
@@ -1226,15 +1233,26 @@ const verifyApiKey = (key) => {
         })
         .catch(() => {
             renderApiKeyMessage(
-                'Invalid API key! Please use the same you use for FFScouter.',
+                'Unable to validate API key. Please confirm your key and try again.',
                 key
             );
         });
 };
 
+const getTargetContainer = () => {
+    const factionMain = document.getElementById('faction-main');
+    return factionMain?.children?.[0]?.children?.[0]?.children?.[0] ?? null;
+};
+
 async function renderNewElements() {
-    // Locate faction info
-    let targetDiv = document.getElementById("faction-main").children[0].children[0].children[0];
+    const targetDiv = getTargetContainer();
+    if (!targetDiv) {
+        return false;
+    }
+
+    if (document.getElementById('war-targets-header')) {
+        return true;
+    }
 
     // Add new divs
     // Header
@@ -1263,6 +1281,8 @@ async function renderNewElements() {
     contentDiv.id = 'war-tagets-content';
     const sixthChild = targetDiv.children[5];
     targetDiv.insertBefore(contentDiv, sixthChild);
+
+    return true;
 }
 
 (async function() {
@@ -1270,8 +1290,13 @@ async function renderNewElements() {
 
     waitForChatRoot();
 
-    setTimeout(() => {
-        renderNewElements();
+    const initialize = () => {
+        if (!renderNewElements()) {
+            setTimeout(initialize, 500);
+            return;
+        }
         verifyApiKey(getInitialApiKey());
-    }, 1000);
+    };
+
+    setTimeout(initialize, 1000);
 })();
