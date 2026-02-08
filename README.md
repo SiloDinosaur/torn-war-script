@@ -111,7 +111,7 @@ Notes:
 
 - The script currently targets Torn web DOM class/id patterns (which may change).
 - It relies on userscript `GM_xmlhttpRequest` privileges (`@grant GM_xmlhttpRequest`).
-- TornPDA compatibility is marked TODO in source.
+- Supports TornPDA request fallback via `PDA_httpGet` when GM networking APIs are unavailable.
 - If API key validation fails, content panel shows an explicit invalid-key message and no polling starts.
 
 ## Security notes
