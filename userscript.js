@@ -20,6 +20,7 @@ const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
 const TARGET_REFRESH_INTERVAL_MS = 15000;
 const MIN_CALL_FRAGMENT_LENGTH = 4;
+const ENABLE_DEBUG_LOGS = true;
 
 // /////////////////////////////
 //
@@ -61,6 +62,12 @@ const LOG_PREFIX = '[Torn War Targets]';
 const logInfo = (...args) => console.log(LOG_PREFIX, ...args);
 const logWarn = (...args) => console.warn(LOG_PREFIX, ...args);
 const logError = (...args) => console.error(LOG_PREFIX, ...args);
+const logDebug = (...args) => {
+    if (!ENABLE_DEBUG_LOGS) {
+        return;
+    }
+    console.debug(LOG_PREFIX, ...args);
+};
 const isFunction = (value) => typeof value === 'function';
 const getModernGmApi = () => globalThis.GM ?? null;
 const getTornPdaHttpGet = () =>
@@ -391,15 +398,24 @@ const dispatchEnterKey = (element) => {
 
 const collectLastMessages = (listElement) => {
     if (!listElement) {
+        logDebug('collectLastMessages skipped: missing chat list element.');
         return [];
     }
-    return [...listElement.children[0].children]
+    const messages = [...listElement.children[0].children]
         .slice(-LAST_N_MESSAGES_TO_CHECK_FOR_DIBS)
         .map((node) => node.innerText);
+    logDebug('Collected recent faction chat messages.', {
+        messageCount: messages.length,
+        maxTrackedMessages: LAST_N_MESSAGES_TO_CHECK_FOR_DIBS,
+    });
+    return messages;
 };
 
 const observeChatList = (listElement) => {
     if (!listElement || chatState.listElement === listElement) {
+        if (!listElement) {
+            logDebug('observeChatList skipped: no list element available yet.');
+        }
         return;
     }
 
@@ -412,6 +428,11 @@ const observeChatList = (listElement) => {
         if (!mutations.some((mutation) => mutation.addedNodes.length > 0)) {
             return;
         }
+
+        logDebug('Faction chat list mutation detected.', {
+            mutationCount: mutations.length,
+            listChildCount: listElement.childElementCount,
+        });
 
         updateCalledTargets(collectLastMessages(listElement));
     });
@@ -758,12 +779,28 @@ const updateCallButtonVisibility = (cardData, targetName) => {
 
 const handleTargetStateTransition = (targetId, targetName, effectiveState) => {
     if (!targetId) {
+        logDebug('handleTargetStateTransition skipped: target id missing.', {
+            targetName,
+            effectiveState,
+        });
         return;
     }
     const previousState = targetState.lastKnownStates.get(targetId);
     targetState.lastKnownStates.set(targetId, effectiveState);
+    if (previousState !== effectiveState) {
+        logDebug('Target state transition tracked.', {
+            targetId,
+            targetName,
+            previousState,
+            effectiveState,
+        });
+    }
     if (previousState === 'Okay' && effectiveState === 'Hospital') {
         if (removeCallsForTargetName(targetName)) {
+            logDebug('Removed call entries due to Okay -> Hospital transition.', {
+                targetId,
+                targetName,
+            });
             rebuildCalledState();
             refreshCallStyles();
         }
@@ -775,6 +812,7 @@ const normalizeMessageKey = (message) => (message ?? '').trim().toLowerCase();
 const parseChatMessageParts = (message) => {
     const text = (message ?? '').replace(/\r/g, '').trim();
     if (!text) {
+        logDebug('Skipping chat parse: message text is empty after trim.');
         return null;
     }
 
@@ -783,11 +821,19 @@ const parseChatMessageParts = (message) => {
         .map((line) => line.trim())
         .filter(Boolean);
     if (lines.length === 0) {
+        logDebug('Skipping chat parse: no non-empty lines remained.', {
+            originalLength: text.length,
+        });
         return null;
     }
 
     const callerMatch = lines[0].match(/^([^:]+):$/);
     if (callerMatch && lines.length >= 2) {
+        logDebug('Parsed chat message with explicit caller prefix.', {
+            callerName: callerMatch[1].trim(),
+            messagePart: lines[1],
+            lineCount: lines.length,
+        });
         return {
             callerName: callerMatch[1].trim(),
             messagePart: lines[1],
@@ -795,6 +841,10 @@ const parseChatMessageParts = (message) => {
         };
     }
 
+    logDebug('Parsed chat message as self/unprefixed call candidate.', {
+        messagePart: lines[0],
+        lineCount: lines.length,
+    });
     return {
         callerName: '',
         messagePart: lines[0],
@@ -804,29 +854,45 @@ const parseChatMessageParts = (message) => {
 
 const extractCallEntry = (message) => {
     if (!message) {
+        logDebug('Skipping call extraction: message is empty.');
         return null;
     }
 
     const messageParts = parseChatMessageParts(message);
     if (!messageParts) {
+        logDebug('Skipping call extraction: message parts parsing failed.', {
+            rawMessage: message,
+        });
         return null;
     }
 
     const { callerName, messagePart, isSelf } = messageParts;
     const match = messagePart.match(/^([a-z0-9]+)(?:\s+in\s+\d+)?(?:[.!?,])?$/i);
     if (!match) {
+        logDebug('Skipping call extraction: message part did not match fragment pattern.', {
+            callerName,
+            messagePart,
+            isSelf,
+        });
         return null;
     }
     const fragment = match[1].toLowerCase();
     if (fragment.length < MIN_CALL_FRAGMENT_LENGTH) {
+        logDebug('Skipping call extraction: fragment too short.', {
+            fragment,
+            fragmentLength: fragment.length,
+            minLength: MIN_CALL_FRAGMENT_LENGTH,
+        });
         return null;
     }
-    return {
+    const entry = {
         fragment,
         callerName,
         isSelf,
         messageKey: normalizeMessageKey(`${callerName}|${messagePart}`),
     };
+    logDebug('Extracted valid call entry from chat message.', entry);
+    return entry;
 };
 
 const rebuildCalledState = () => {
@@ -846,6 +912,11 @@ const rebuildCalledState = () => {
     targetState.calledFragments = fragments;
     targetState.calledBy = calledBy;
     targetState.selfCalledFragments = selfFragments;
+    logDebug('Rebuilt called-state indexes.', {
+        calledFragments: [...fragments],
+        selfCalledFragments: [...selfFragments],
+        calledBy: [...calledBy.entries()],
+    });
 };
 
 const refreshCallStyles = () => {
@@ -858,6 +929,7 @@ const refreshCallStyles = () => {
 };
 
 const pruneParsedMessages = (now) => {
+    const originalSize = targetState.parsedMessages.size;
     targetState.parsedMessages.forEach((parsedAt, key) => {
         if (now - parsedAt > CALL_FULFILLMENT_TIMEOUT_MS) {
             targetState.parsedMessages.delete(key);
@@ -867,9 +939,18 @@ const pruneParsedMessages = (now) => {
         const oldestKey = targetState.parsedMessages.keys().next().value;
         targetState.parsedMessages.delete(oldestKey);
     }
+    if (targetState.parsedMessages.size !== originalSize) {
+        logDebug('Pruned parsed message cache.', {
+            before: originalSize,
+            after: targetState.parsedMessages.size,
+            timeoutMs: CALL_FULFILLMENT_TIMEOUT_MS,
+            maxTrackedMessages: LAST_N_MESSAGES_TO_CHECK_FOR_DIBS,
+        });
+    }
 };
 
 const pruneCallEntries = (now) => {
+    const originalCount = targetState.callEntries.length;
     targetState.callEntries = targetState.callEntries.filter(
         (entry) => now - entry.parsedAt <= CALL_FULFILLMENT_TIMEOUT_MS
     );
@@ -880,10 +961,19 @@ const pruneCallEntries = (now) => {
             targetState.callEntries.length - LAST_N_MESSAGES_TO_CHECK_FOR_DIBS
         );
     }
+    if (targetState.callEntries.length !== originalCount) {
+        logDebug('Pruned call fulfillment entries.', {
+            before: originalCount,
+            after: targetState.callEntries.length,
+            timeoutMs: CALL_FULFILLMENT_TIMEOUT_MS,
+            maxTrackedMessages: LAST_N_MESSAGES_TO_CHECK_FOR_DIBS,
+        });
+    }
 };
 
 const removeCallsForTargetName = (targetName) => {
     if (!targetName) {
+        logDebug('removeCallsForTargetName skipped: missing target name.');
         return false;
     }
     const lowerName = targetName.toLowerCase();
@@ -891,27 +981,60 @@ const removeCallsForTargetName = (targetName) => {
     targetState.callEntries = targetState.callEntries.filter(
         (entry) => !lowerName.startsWith(entry.fragment)
     );
-    return targetState.callEntries.length !== originalLength;
+    const removed = targetState.callEntries.length !== originalLength;
+    if (removed) {
+        logDebug('Removed call entries for target fulfillment target.', {
+            targetName,
+            removedCount: originalLength - targetState.callEntries.length,
+        });
+    }
+    return removed;
 };
 
 const updateCalledTargets = (messages) => {
     const now = Date.now();
+    logDebug('Starting called-target update cycle.', {
+        incomingMessageCount: (messages ?? []).length,
+        existingCallEntries: targetState.callEntries.length,
+        parsedMessageCacheSize: targetState.parsedMessages.size,
+    });
     (messages ?? []).forEach((message) => {
         const entry = extractCallEntry(message);
-        if (!entry || targetState.parsedMessages.has(entry.messageKey)) {
+        if (!entry) {
+            return;
+        }
+        if (targetState.parsedMessages.has(entry.messageKey)) {
+            logDebug('Skipping duplicate call entry based on message key.', {
+                messageKey: entry.messageKey,
+                fragment: entry.fragment,
+            });
             return;
         }
         targetState.parsedMessages.set(entry.messageKey, now);
+        const hadExistingFragment = targetState.callEntries.some(
+            (existing) => existing.fragment === entry.fragment
+        );
         targetState.callEntries = targetState.callEntries.filter(
             (existing) => existing.fragment !== entry.fragment
         );
         targetState.callEntries.push({ ...entry, parsedAt: now });
+        logDebug('Registered/updated call fulfillment entry.', {
+            fragment: entry.fragment,
+            callerName: entry.callerName,
+            isSelf: entry.isSelf,
+            replacedExistingFragment: hadExistingFragment,
+        });
     });
 
     pruneParsedMessages(now);
     pruneCallEntries(now);
     rebuildCalledState();
     refreshCallStyles();
+    logDebug('Completed called-target update cycle.', {
+        totalCallEntries: targetState.callEntries.length,
+        calledFragmentsCount: targetState.calledFragments.size,
+        selfCalledFragmentsCount: targetState.selfCalledFragments.size,
+    });
 };
 
 const ensureTargetLayout = () => {
