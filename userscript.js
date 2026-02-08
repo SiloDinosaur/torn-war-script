@@ -5,14 +5,15 @@
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
+// @match        https://www.torn.com/loader.php?sid=factions*&step=your*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @connect      api.torn.com
+// @connect      ffscouter.com
 // ==/UserScript==
-
-// TODO
-// Make it compatible with TornPDA
 
 // Feel free to modify these values
 const FFSCOUTER_API_KEY = '';
@@ -58,6 +59,17 @@ const chatState = {
 };
 const statsCache = new Map();
 const isFunction = (value) => typeof value === 'function';
+const getXmlHttpRequest = () => {
+    if (isFunction(globalThis.GM_xmlhttpRequest)) {
+        return globalThis.GM_xmlhttpRequest;
+    }
+
+    if (isFunction(globalThis.GM?.xmlHttpRequest)) {
+        return globalThis.GM.xmlHttpRequest.bind(globalThis.GM);
+    }
+
+    return null;
+};
 
 const safeGetValue = (key, fallback = '') => {
     if (!isFunction(globalThis.GM_getValue)) {
@@ -1063,7 +1075,9 @@ const renderApiKeyMessage = (message, initialValue = '') => {
 };
 
 const requestJson = (url) => {
-    if (!isFunction(globalThis.GM_xmlhttpRequest)) {
+    const xmlHttpRequest = getXmlHttpRequest();
+
+    if (!xmlHttpRequest) {
         return fetch(url, { method: 'GET' }).then((response) => {
             if (!response.ok) {
                 throw new Error(`Request failed with status ${response.status}`);
@@ -1073,7 +1087,7 @@ const requestJson = (url) => {
     }
 
     return new Promise((resolve, reject) => {
-        GM_xmlhttpRequest({
+        xmlHttpRequest({
             method: 'GET',
             url,
             timeout: REQUEST_TIMEOUT_MS,
@@ -1286,7 +1300,26 @@ const verifyApiKey = (key) => {
 
 const getTargetContainer = () => {
     const factionMain = document.getElementById('faction-main');
-    return factionMain?.children?.[0]?.children?.[0]?.children?.[0] ?? null;
+    if (factionMain?.children?.[0]?.children?.[0]?.children?.[0]) {
+        return factionMain.children[0].children[0].children[0];
+    }
+
+    const fallbackSelectors = [
+        '#faction-controls',
+        '#mainContainer .content-wrapper',
+        '#mainContainer .content-title',
+        '#mainContainer',
+        'main',
+    ];
+
+    for (const selector of fallbackSelectors) {
+        const container = document.querySelector(selector);
+        if (container) {
+            return container;
+        }
+    }
+
+    return null;
 };
 
 function renderNewElements() {
@@ -1317,15 +1350,15 @@ function renderNewElements() {
     headerDiv.appendChild(headerContent);
     headerDiv.className = 'title-black title-toggle m-top10 tablet active top-round';
     headerDiv.id = 'war-targets-header';
-    const fifthChild = targetDiv.children[4];
-    targetDiv.insertBefore(headerDiv, fifthChild);
+    const headerAnchor = targetDiv.children?.[4] ?? null;
+    targetDiv.insertBefore(headerDiv, headerAnchor);
     // Content
     const contentDiv = document.createElement('div');
     contentDiv.textContent = 'Checking API key...';
     contentDiv.className = 'cont-gray10 cont-toggle bottom-round editor-content announcement unreset scrollbar-bright';
     contentDiv.id = 'war-tagets-content';
-    const sixthChild = targetDiv.children[5];
-    targetDiv.insertBefore(contentDiv, sixthChild);
+    const contentAnchor = targetDiv.children?.[5] ?? null;
+    targetDiv.insertBefore(contentDiv, contentAnchor);
 
     return true;
 }
