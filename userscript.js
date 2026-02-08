@@ -401,7 +401,14 @@ const collectLastMessages = (listElement) => {
         logDebug('collectLastMessages skipped: missing chat list element.');
         return [];
     }
-    const messages = [...listElement.children[0].children]
+
+    const messageContainer = listElement.firstElementChild;
+    if (!messageContainer) {
+        logDebug('collectLastMessages skipped: message container is unavailable.');
+        return [];
+    }
+
+    const messages = [...messageContainer.children]
         .slice(-LAST_N_MESSAGES_TO_CHECK_FOR_DIBS)
         .map((node) => node.innerText);
     logDebug('Collected recent faction chat messages.', {
@@ -437,7 +444,7 @@ const observeChatList = (listElement) => {
         updateCalledTargets(collectLastMessages(listElement));
     });
 
-    chatState.listObserver.observe(listElement, { childList: true });
+    chatState.listObserver.observe(listElement, { childList: true, subtree: true });
     updateCalledTargets(collectLastMessages(listElement));
 };
 
