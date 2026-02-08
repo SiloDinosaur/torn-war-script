@@ -1,19 +1,21 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 10:51:00
+// @version      2026-02-08 12:05:00
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=torn.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // ==/UserScript==
 
 // TODO
 // Make it compatible with TornPDA
 
 // Feel free to modify these values
-const FFSCOUTER_API_KEY = 'my dummy value';
+const FFSCOUTER_API_KEY = '';
 const MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
@@ -26,6 +28,7 @@ const TARGET_REFRESH_INTERVAL_MS = 15000;
 // /////////////////////////////
 
 const FFSCOUTER_KEY_LENGTH = 16;
+const FFSCOUTER_API_KEY_STORAGE_KEY = 'ffscouterApiKey';
 const CONTENT_ELEMENT_ID = 'war-tagets-content';
 const TARGET_STYLE_ID = 'war-targets-style';
 const CALL_FULFILLMENT_TIMEOUT_MS = CALL_FULFILLMENT_TIMEOUT_MINUTES * 60 * 1000;
@@ -231,6 +234,40 @@ const ensureTargetStyles = () => {
         .war-targets-message {
             font-size: 12px;
             color: #e5e7eb;
+        }
+
+        .war-targets-api-key-form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .war-targets-api-key-input {
+            min-width: 220px;
+            width: min(320px, 100%);
+            border: 1px solid #4b5563;
+            border-radius: 6px;
+            padding: 6px 8px;
+            background: #0f172a;
+            color: #f8fafc;
+            font-size: 12px;
+        }
+
+        .war-targets-api-key-button {
+            border: 1px solid #2563eb;
+            border-radius: 6px;
+            padding: 6px 10px;
+            background: #1d4ed8;
+            color: #eff6ff;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .war-targets-api-key-button:hover {
+            background: #1e40af;
         }
     `;
 
@@ -919,6 +956,76 @@ const setContentMessage = (message) => {
     targetState.grid.style.display = 'none';
 };
 
+const getStoredApiKey = () => {
+    const storedKey = GM_getValue(FFSCOUTER_API_KEY_STORAGE_KEY, '');
+    if (typeof storedKey === 'string') {
+        return storedKey.trim();
+    }
+
+    return '';
+};
+
+const setStoredApiKey = (key) => {
+    GM_setValue(FFSCOUTER_API_KEY_STORAGE_KEY, key);
+};
+
+const getInitialApiKey = () => {
+    const storedKey = getStoredApiKey();
+    if (storedKey) {
+        return storedKey;
+    }
+
+    return (FFSCOUTER_API_KEY || '').trim();
+};
+
+const renderApiKeyMessage = (message, initialValue = '') => {
+    if (!ensureTargetLayout()) {
+        return;
+    }
+
+    targetState.message.textContent = '';
+
+    const textElement = document.createElement('div');
+    textElement.textContent = message;
+
+    const form = document.createElement('div');
+    form.className = 'war-targets-api-key-form';
+
+    const keyInput = document.createElement('input');
+    keyInput.className = 'war-targets-api-key-input';
+    keyInput.type = 'text';
+    keyInput.maxLength = FFSCOUTER_KEY_LENGTH;
+    keyInput.placeholder = 'Enter your FFScouter API key';
+    keyInput.value = initialValue;
+
+    const saveButton = document.createElement('button');
+    saveButton.className = 'war-targets-api-key-button';
+    saveButton.type = 'button';
+    saveButton.textContent = 'Save';
+
+    const submitApiKey = () => {
+        const key = keyInput.value.trim();
+        setStoredApiKey(key);
+        verifyApiKey(key);
+    };
+
+    saveButton.addEventListener('click', submitApiKey);
+    keyInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            submitApiKey();
+        }
+    });
+
+    form.appendChild(keyInput);
+    form.appendChild(saveButton);
+    targetState.message.appendChild(textElement);
+    targetState.message.appendChild(form);
+
+    targetState.message.style.display = 'block';
+    targetState.grid.style.display = 'none';
+};
+
 const requestJson = (url) =>
     new Promise((resolve, reject) => {
         GM_xmlhttpRequest({
@@ -1097,7 +1204,10 @@ const startAutoRefresh = (key) => {
 
 const verifyApiKey = (key) => {
     if (!key || key.length !== FFSCOUTER_KEY_LENGTH) {
-        setContentMessage('Invalid API key! Please use the same you use for FFScouter.');
+        renderApiKeyMessage(
+            'Invalid API key! Please use the same you use for FFScouter.',
+            key
+        );
         return;
     }
 
@@ -1108,13 +1218,17 @@ const verifyApiKey = (key) => {
             if (!data?.is_registered) {
                 throw new Error('Invalid API key.');
             }
+            setStoredApiKey(key);
             return loadTargets(key).then(() => {
                 startAutoRefresh(key);
                 startLastUpdatedTimer();
             });
         })
         .catch(() => {
-            setContentMessage('Invalid API key! Please use the same you use for FFScouter.');
+            renderApiKeyMessage(
+                'Invalid API key! Please use the same you use for FFScouter.',
+                key
+            );
         });
 };
 
@@ -1158,6 +1272,6 @@ async function renderNewElements() {
 
     setTimeout(() => {
         renderNewElements();
-        verifyApiKey(FFSCOUTER_API_KEY);
+        verifyApiKey(getInitialApiKey());
     }, 1000);
 })();
