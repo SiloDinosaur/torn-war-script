@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      2026-02-08 12:16:00
+// @version      1.0.0
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -20,7 +20,7 @@ const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
 const TARGET_REFRESH_INTERVAL_MS = 15000;
 const MIN_CALL_FRAGMENT_LENGTH = 4;
-const ENABLE_DEBUG_LOGS = true;
+const ENABLE_DEBUG_LOGS = false;
 
 // /////////////////////////////
 //
