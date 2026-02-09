@@ -62,6 +62,47 @@ Notes:
 - FFScouter batch stats are fetched once initially and cached.
 - Auto-refresh reuses cache (`useScouter: false`) to reduce repeated external calls.
 
+### High-level sequence (API + loop)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User (Torn Faction Page)
+    participant S as Userscript
+    participant T as Torn API
+    participant F as FFScouter API
+    participant C as Faction Chat
+
+    U->>S: Open factions.php?step=your*
+    S->>S: Wait ~1s, inject UI, validate config
+    S->>F: GET /api/v1/check-key
+    F-->>S: Key valid/invalid
+
+    S->>T: GET /v2/faction
+    T-->>S: Own faction id
+    S->>T: GET /v2/faction/rankedwars?limit=1
+    T-->>S: Active war + enemy faction id
+    S->>T: GET /v2/faction/{enemyId}/members
+    T-->>S: Enemy members + status
+    S->>F: GET /api/v1/get-stats (member ids)
+    F-->>S: Fair-fight + battle stat estimates
+    S-->>U: Render/update target board
+    S->>C: Read latest N messages (for calls)
+    C-->>S: Recent chat entries
+    S-->>U: Mark claimed targets + enable Call actions
+
+    loop Every TARGET_REFRESH_INTERVAL_MS (default 15000ms)
+        S->>T: GET /v2/faction/rankedwars?limit=1
+        T-->>S: Enemy faction context
+        S->>T: GET /v2/faction/{enemyId}/members
+        T-->>S: Updated member statuses
+        S-->>U: Refresh board + last-updated timer
+        S->>C: Re-read last N chat messages
+        C-->>S: Updated claims
+        S-->>U: Refresh called-state highlights
+    end
+```
+
 ### 4) UI layer
 
 - `renderNewElements()` injects header/content containers into the faction page.
