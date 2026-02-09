@@ -172,4 +172,4 @@ sequenceDiagram
 
 ## License
 
-MIT. See `LICENSE`.
+Unlicense. See `LICENSE`.
