@@ -31,6 +31,9 @@ const FFSCOUTER_KEY_LENGTH = 16;
 const MIN_CALL_FRAGMENT_LENGTH = 4;
 const FFSCOUTER_API_KEY_STORAGE_KEY = 'ffscouterApiKey';
 const CONTENT_ELEMENT_ID = 'war-tagets-content';
+const HEADER_ELEMENT_ID = 'war-targets-header';
+const HEADER_TITLE_CLASS = 'war-targets-header-title';
+const NO_ACTIVE_WAR_MESSAGE = 'YOUR FACTION IS CURRENTLY NOT IN A WAR';
 const TARGET_STYLE_ID = 'war-targets-style';
 const CALL_FULFILLMENT_TIMEOUT_MS = CALL_FULFILLMENT_TIMEOUT_MINUTES * 60 * 1000;
 const LAST_UPDATED_INTERVAL_MS = 1000;
@@ -117,6 +120,38 @@ const getAvailabilityStatus = (member) => {
     }
 
     return member?.last_update?.status ?? member?.last_action?.status ?? 'Offline';
+};
+
+const hasOwn = (value, property) =>
+    value != null && Object.prototype.hasOwnProperty.call(value, property);
+const isCompletedRankedWar = (war) => hasOwn(war, 'winner') || hasOwn(war, 'end');
+const getHeaderTitle = ({ noActiveWar = false } = {}) => {
+    const baseTitle = `My Targets | Max FF: ${MAX_FAIR_FIGHT}`;
+    if (!noActiveWar) {
+        return baseTitle;
+    }
+    return `${baseTitle} | ${NO_ACTIVE_WAR_MESSAGE}`;
+};
+
+const setNoActiveWarHeaderState = (isNoActiveWar) => {
+    const header = document.getElementById(HEADER_ELEMENT_ID);
+    const headerTitle = header?.querySelector(`.${HEADER_TITLE_CLASS}`);
+    if (headerTitle) {
+        headerTitle.textContent = getHeaderTitle({ noActiveWar: isNoActiveWar });
+    }
+
+    const lastUpdated = header?.querySelector('.war-targets-last-updated');
+    if (lastUpdated) {
+        lastUpdated.style.display = isNoActiveWar ? 'none' : '';
+        if (!isNoActiveWar && !headerState.lastUpdatedAt) {
+            lastUpdated.textContent = 'Last updated: --';
+        }
+    }
+
+    const content = document.getElementById(CONTENT_ELEMENT_ID);
+    if (content) {
+        content.style.display = isNoActiveWar ? 'none' : '';
+    }
 };
 
 const isFederalTarget = (target) => target?.status?.state === 'Federal';
@@ -1384,7 +1419,14 @@ const fetchEnemyFaction = async (key, currentFactionId) => {
         : Array.isArray(data)
           ? data
           : [];
-    const activeWar = rankedWars?.[0] ?? null;
+    const activeWar = rankedWars.find((war) => !isCompletedRankedWar(war)) ?? null;
+    if (!activeWar) {
+        logInfo('No active ranked war found for current faction.', {
+            currentFactionId,
+            rankedWarCount: rankedWars.length,
+        });
+        return null;
+    }
     const factions = activeWar?.factions ?? [];
     const enemyFaction = factions.find(
         (faction) => String(faction?.id) !== String(currentFactionId)
@@ -1469,18 +1511,24 @@ const fetchEnemyTargets = async (key, enemyId, { useScouter = true } = {}) => {
 
 const loadTargets = async (key, options = {}) => {
     const { showLoading = true, ...requestOptions } = options;
+    setNoActiveWarHeaderState(false);
     if (showLoading) {
         setContentMessage('Loading targets...');
     }
     const factionInfo = await fetchFactionInfo(key);
     const enemyInfo = await fetchEnemyFaction(key, factionInfo?.id);
+    if (!enemyInfo?.id) {
+        headerState.lastUpdatedAt = null;
+        setNoActiveWarHeaderState(true);
+        return;
+    }
     const targets = await fetchEnemyTargets(key, enemyInfo?.id, requestOptions);
     headerState.lastUpdatedAt = Date.now();
     renderTargetGrid(targets);
 };
 
 const updateLastUpdatedText = () => {
-    const header = document.getElementById('war-targets-header');
+    const header = document.getElementById(HEADER_ELEMENT_ID);
     const lastUpdated = header?.querySelector('.war-targets-last-updated');
     if (!lastUpdated) {
         return;
@@ -1570,7 +1618,7 @@ function renderNewElements() {
         return false;
     }
 
-    if (document.getElementById('war-targets-header')) {
+    if (document.getElementById(HEADER_ELEMENT_ID)) {
         return true;
     }
 
@@ -1581,7 +1629,8 @@ function renderNewElements() {
     headerContent.className = 'war-targets-header-content';
 
     const headerTitle = document.createElement('span');
-    headerTitle.textContent = `My Targets | Max FF: ${MAX_FAIR_FIGHT}`;
+    headerTitle.className = HEADER_TITLE_CLASS;
+    headerTitle.textContent = getHeaderTitle();
 
     const lastUpdated = document.createElement('span');
     lastUpdated.className = 'war-targets-last-updated';
@@ -1591,7 +1640,7 @@ function renderNewElements() {
     headerContent.appendChild(lastUpdated);
     headerDiv.appendChild(headerContent);
     headerDiv.className = 'title-black title-toggle m-top10 tablet active top-round';
-    headerDiv.id = 'war-targets-header';
+    headerDiv.id = HEADER_ELEMENT_ID;
     const fifthChild = targetDiv.children[4];
     targetDiv.insertBefore(headerDiv, fifthChild);
     // Content
