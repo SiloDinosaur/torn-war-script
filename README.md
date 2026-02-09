@@ -33,11 +33,11 @@ The script is a single-file userscript (`userscript.js`) structured into a few i
 
 At the top of the script:
 
-- `FFSCOUTER_API_KEY` — required; must be your FFScouter key (16 chars).
 - `MAX_FAIR_FIGHT` — upper fair-fight threshold for displayed targets.
 - `LAST_N_MESSAGES_TO_CHECK_FOR_DIBS` — chat window size used for call parsing.
 - `CALL_FULFILLMENT_TIMEOUT_MINUTES` — claim expiration window.
 - `TARGET_REFRESH_INTERVAL_MS` — polling period for background refresh.
+- `ENABLE_DEBUG_LOGS` - verbose logging
 
 Everything below the `DO NOT TOUCH` divider is considered implementation internals.
 
@@ -137,8 +137,7 @@ sequenceDiagram
    - Violentmonkey / Greasemonkey
 2. Create a new script and paste `userscript.js`.
 3. Edit config constants at the top of the file.
-4. Set `FFSCOUTER_API_KEY` to your real key.
-5. Save and open Torn faction page:
+4. Save and open Torn faction page and follow instructions:
    - `https://www.torn.com/factions.php?step=your*`
 
 ## Runtime behavior and performance

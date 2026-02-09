@@ -19,7 +19,6 @@ const MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
 const TARGET_REFRESH_INTERVAL_MS = 15000;
-const MIN_CALL_FRAGMENT_LENGTH = 4;
 const ENABLE_DEBUG_LOGS = false;
 
 // /////////////////////////////
@@ -29,6 +28,7 @@ const ENABLE_DEBUG_LOGS = false;
 // /////////////////////////////
 
 const FFSCOUTER_KEY_LENGTH = 16;
+const MIN_CALL_FRAGMENT_LENGTH = 4;
 const FFSCOUTER_API_KEY_STORAGE_KEY = 'ffscouterApiKey';
 const CONTENT_ELEMENT_ID = 'war-tagets-content';
 const TARGET_STYLE_ID = 'war-targets-style';
