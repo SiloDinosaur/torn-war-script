@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.2.1
+// @version      v1.2.2
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -33,7 +33,7 @@ const FFSCOUTER_API_KEY_STORAGE_KEY = 'ffscouterApiKey';
 const CONTENT_ELEMENT_ID = 'war-tagets-content';
 const HEADER_ELEMENT_ID = 'war-targets-header';
 const HEADER_TITLE_CLASS = 'war-targets-header-title';
-const NO_ACTIVE_WAR_MESSAGE = 'YOUR FACTION IS CURRENTLY NOT IN A WAR';
+const NO_ACTIVE_WAR_MESSAGE = 'NO ONGOING WAR';
 const TARGET_STYLE_ID = 'war-targets-style';
 const CALL_FULFILLMENT_TIMEOUT_MS = CALL_FULFILLMENT_TIMEOUT_MINUTES * 60 * 1000;
 const LAST_UPDATED_INTERVAL_MS = 1000;
@@ -126,9 +126,9 @@ const hasOwn = (value, property) =>
     value != null && Object.prototype.hasOwnProperty.call(value, property);
 const isCompletedRankedWar = (war) => hasOwn(war, 'winner') || hasOwn(war, 'end');
 const getHeaderTitle = ({ noActiveWar = false } = {}) => {
-    const baseTitle = `My Targets | Max FF: ${MAX_FAIR_FIGHT}`;
+    const baseTitle = `My Targets`;
     if (!noActiveWar) {
-        return baseTitle;
+        return `${baseTitle} | Max FF: ${MAX_FAIR_FIGHT}`;
     }
     return `${baseTitle} | ${NO_ACTIVE_WAR_MESSAGE}`;
 };
