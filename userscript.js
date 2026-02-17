@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.4.0
+// @version      v1.4.1
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -869,7 +869,9 @@ const updateCallButtonVisibility = (cardData, targetName) => {
         return;
     }
     const shouldShow =
-        !isTargetCalled(targetName) && !isTargetCalledBySelf(targetName);
+        isCallEligible(cardData?.targetData) &&
+        !isTargetCalled(targetName) &&
+        !isTargetCalledBySelf(targetName);
     cardData.callButton.style.display = shouldShow ? 'inline-flex' : 'none';
 };
 
