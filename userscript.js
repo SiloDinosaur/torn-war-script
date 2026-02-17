@@ -43,6 +43,8 @@ const headerState = {
     lastUpdatedAt: null,
     lastUpdatedTimer: null,
     refreshTimer: null,
+    isCollapsed: true,
+    noActiveWar: false,
 };
 const targetState = {
     cards: new Map(),
@@ -161,6 +163,7 @@ const getHeaderTitle = ({ noActiveWar = false } = {}) => {
 const setNoActiveWarHeaderState = (isNoActiveWar) => {
     const header = document.getElementById(HEADER_ELEMENT_ID);
     const headerTitle = header?.querySelector(`.${HEADER_TITLE_CLASS}`);
+    headerState.noActiveWar = Boolean(isNoActiveWar);
     if (headerTitle) {
         headerTitle.textContent = getHeaderTitle({ noActiveWar: isNoActiveWar });
     }
@@ -174,9 +177,17 @@ const setNoActiveWarHeaderState = (isNoActiveWar) => {
     }
 
     const content = document.getElementById(CONTENT_ELEMENT_ID);
-    if (content) {
-        content.style.display = isNoActiveWar ? 'none' : '';
+    if (content && header) {
+        const shouldHideContent = headerState.noActiveWar || headerState.isCollapsed;
+        header.classList.toggle('active', !shouldHideContent);
+        header.setAttribute('aria-expanded', String(!shouldHideContent));
+        content.style.display = shouldHideContent ? 'none' : '';
     }
+};
+
+const toggleCollapsedState = () => {
+    headerState.isCollapsed = !headerState.isCollapsed;
+    setNoActiveWarHeaderState(headerState.noActiveWar);
 };
 
 const isFederalTarget = (target) => target?.status?.state === 'Federal';
@@ -1694,6 +1705,10 @@ function renderNewElements() {
     headerDiv.appendChild(headerContent);
     headerDiv.className = 'title-black title-toggle m-top10 tablet active top-round';
     headerDiv.id = HEADER_ELEMENT_ID;
+    headerDiv.setAttribute('aria-expanded', 'true');
+    headerDiv.addEventListener('click', () => {
+        toggleCollapsedState();
+    });
     const fifthChild = targetDiv.children[4];
     targetDiv.insertBefore(headerDiv, fifthChild);
     // Content
@@ -1703,6 +1718,7 @@ function renderNewElements() {
     contentDiv.id = 'war-tagets-content';
     const sixthChild = targetDiv.children[5];
     targetDiv.insertBefore(contentDiv, sixthChild);
+    setNoActiveWarHeaderState(false);
 
     return true;
 }
