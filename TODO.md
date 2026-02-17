@@ -1,0 +1,1 @@
+The collapsed bar could also work as a notification bar if like your target is up next, or your target has self hosped, or upon calling your planned target is under called status or over 15 mins
