@@ -124,7 +124,32 @@ const getAvailabilityStatus = (member) => {
 
 const hasOwn = (value, property) =>
     value != null && Object.prototype.hasOwnProperty.call(value, property);
-const isCompletedRankedWar = (war) => hasOwn(war, 'winner') || hasOwn(war, 'end');
+const isCompletedRankedWar = (war) => {
+    const winner = war?.winner;
+    if (winner != null && winner !== '') {
+        return true;
+    }
+
+    const endValue = Number(war?.end);
+    return Number.isFinite(endValue) && endValue > 0;
+};
+const toTimestampMs = (value) => {
+    if (value == null || value === '') {
+        return null;
+    }
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+        if (numeric > 1e12) {
+            return numeric;
+        }
+        if (numeric > 1e9) {
+            return numeric * 1000;
+        }
+    }
+    const parsedDate = Date.parse(value);
+    return Number.isNaN(parsedDate) ? null : parsedDate;
+};
+
 const getHeaderTitle = ({ noActiveWar = false } = {}) => {
     const baseTitle = `My Targets`;
     if (!noActiveWar) {
@@ -1414,34 +1439,61 @@ const fetchEnemyFaction = async (key, currentFactionId) => {
             key
         )}&limit=1`
     );
-    const rankedWars = Array.isArray(data?.rankedwars)
-        ? data.rankedwars
-        : Array.isArray(data)
-          ? data
-          : [];
-    const activeWar = rankedWars.find((war) => !isCompletedRankedWar(war)) ?? null;
-    if (!activeWar) {
+    const rankedWarsRaw = data?.rankedwars ?? data;
+    const rankedWars = Array.isArray(rankedWarsRaw)
+        ? rankedWarsRaw
+        : Object.values(rankedWarsRaw ?? {});
+    const nowMs = Date.now();
+    const candidates = rankedWars
+        .filter((war) => !isCompletedRankedWar(war))
+        .map((war) => {
+            const factions = war?.factions ?? [];
+            const enemyFaction = factions.find(
+                (faction) => String(faction?.id) !== String(currentFactionId)
+            );
+            const startAtMs = toTimestampMs(war?.start);
+            const isUpcoming = Number.isFinite(startAtMs) && startAtMs > nowMs;
+
+            return { enemyFaction, startAtMs, isUpcoming };
+        })
+        .filter((entry) => Boolean(entry.enemyFaction?.id));
+
+    if (candidates.length === 0) {
         logInfo('No active ranked war found for current faction.', {
             currentFactionId,
             rankedWarCount: rankedWars.length,
         });
         return null;
     }
-    const factions = activeWar?.factions ?? [];
-    const enemyFaction = factions.find(
-        (faction) => String(faction?.id) !== String(currentFactionId)
-    );
+
+    const ongoingCandidates = candidates.filter((entry) => !entry.isUpcoming);
+    const upcomingCandidates = candidates.filter((entry) => entry.isUpcoming);
+    ongoingCandidates.sort((first, second) => {
+        const firstStart = first.startAtMs ?? -Infinity;
+        const secondStart = second.startAtMs ?? -Infinity;
+        return secondStart - firstStart;
+    });
+    upcomingCandidates.sort((first, second) => {
+        const firstStart = first.startAtMs ?? Infinity;
+        const secondStart = second.startAtMs ?? Infinity;
+        return firstStart - secondStart;
+    });
+    const selected = ongoingCandidates[0] ?? upcomingCandidates[0] ?? candidates[0];
+    const enemyFaction = selected?.enemyFaction;
 
     if (!enemyFaction?.id) {
         logError('Unable to resolve enemy faction from ranked wars response.', {
             currentFactionId,
             rankedWars,
-            activeWar,
+            selected,
         });
         throw new Error('Unable to resolve enemy faction.');
     }
 
-    return { id: String(enemyFaction.id), name: enemyFaction?.name ?? '' };
+    return {
+        id: String(enemyFaction.id),
+        name: enemyFaction?.name ?? '',
+    };
 };
 
 const fetchEnemyTargets = async (key, enemyId, { useScouter = true } = {}) => {
@@ -1522,6 +1574,7 @@ const loadTargets = async (key, options = {}) => {
         setNoActiveWarHeaderState(true);
         return;
     }
+    setNoActiveWarHeaderState(false);
     const targets = await fetchEnemyTargets(key, enemyInfo?.id, requestOptions);
     headerState.lastUpdatedAt = Date.now();
     renderTargetGrid(targets);
