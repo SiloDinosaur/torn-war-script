@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.6.1
+// @version      v1.6.2
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -261,6 +261,10 @@ const ensureTargetStyles = () => {
     const style = document.createElement('style');
     style.id = TARGET_STYLE_ID;
     style.textContent = `
+        #${HEADER_ELEMENT_ID} {
+            cursor: pointer;
+        }
+
         .war-targets-wrapper {
             display: flex;
             flex-direction: column;
@@ -1851,10 +1855,15 @@ function renderNewElements() {
     headerContent.appendChild(headerTitle);
     headerContent.appendChild(lastUpdated);
     headerDiv.appendChild(headerContent);
-    headerDiv.className = 'title-black title-toggle m-top10 tablet active top-round';
+    headerDiv.className =
+        'title-black m-top10 tablet active top-round war-targets-header';
     headerDiv.id = HEADER_ELEMENT_ID;
     headerDiv.setAttribute('aria-expanded', 'true');
-    headerDiv.addEventListener('click', () => {
+    headerDiv.addEventListener('click', (event) => {
+        // Ignore synthetic clicks that can be dispatched by host-page accordion scripts.
+        if (!event.isTrusted) {
+            return;
+        }
         toggleCollapsedState();
     });
     const fifthChild = targetDiv.children[4];
@@ -1862,7 +1871,8 @@ function renderNewElements() {
     // Content
     const contentDiv = document.createElement('div');
     contentDiv.textContent = 'Checking API key...';
-    contentDiv.className = 'cont-gray10 cont-toggle bottom-round editor-content announcement unreset scrollbar-bright';
+    contentDiv.className =
+        'cont-gray10 bottom-round editor-content announcement unreset scrollbar-bright war-targets-content';
     contentDiv.id = 'war-tagets-content';
     const sixthChild = targetDiv.children[5];
     targetDiv.insertBefore(contentDiv, sixthChild);
