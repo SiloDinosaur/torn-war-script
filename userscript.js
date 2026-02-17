@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.4.1
+// @version      v1.4.2
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -707,7 +707,7 @@ const renderTargetCard = (target) => {
     if (targetId) {
         card.addEventListener('click', () => {
             window.open(
-                `https://www.torn.com/profiles.php?XID=${encodeURIComponent(targetId)}`,
+                `https://www.torn.com/loader.php?sid=attack&user2ID=${encodeURIComponent(targetId)}`,
                 '_blank',
                 'noopener'
             );
