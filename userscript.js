@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.5.1
+// @version      v1.6.0
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -54,6 +54,7 @@ const targetState = {
     settingsPanel: null,
     minFairFightInput: null,
     maxFairFightInput: null,
+    onlineFirstInput: null,
     calledFragments: new Set(),
     calledExactNames: new Set(),
     calledBy: new Map(),
@@ -67,6 +68,7 @@ const targetState = {
     latestTargets: [],
     minFairFight: DEFAULT_MIN_FAIR_FIGHT,
     maxFairFight: DEFAULT_MAX_FAIR_FIGHT,
+    onlineFirst: false,
 };
 const chatState = {
     listObserver: null,
@@ -199,6 +201,13 @@ const applyFairFightFilter = () => {
     targetState.minFairFight = Math.min(nextMin, nextMax);
     targetState.maxFairFight = Math.max(nextMin, nextMax);
     setNoActiveWarHeaderState(headerState.noActiveWar);
+    if (targetState.latestTargets.length > 0) {
+        renderTargetGrid(targetState.latestTargets);
+    }
+};
+
+const applyOnlineFirstSetting = () => {
+    targetState.onlineFirst = Boolean(targetState.onlineFirstInput?.checked);
     if (targetState.latestTargets.length > 0) {
         renderTargetGrid(targetState.latestTargets);
     }
@@ -441,6 +450,15 @@ const ensureTargetStyles = () => {
             color: #f8fafc;
             font-size: 11px;
             padding: 3px 4px;
+        }
+
+        .war-targets-settings input[type='checkbox'] {
+            width: auto;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            padding: 0;
+            accent-color: #38bdf8;
         }
 
         .war-targets-api-key-form {
@@ -1261,8 +1279,16 @@ const ensureTargetLayout = () => {
 
         targetState.settingsPanel.appendChild(minLabel);
         targetState.settingsPanel.appendChild(maxLabel);
+        const onlineFirstLabel = document.createElement('label');
+        onlineFirstLabel.textContent = 'onlines first';
+        targetState.onlineFirstInput = document.createElement('input');
+        targetState.onlineFirstInput.type = 'checkbox';
+        targetState.onlineFirstInput.checked = targetState.onlineFirst;
+        onlineFirstLabel.appendChild(targetState.onlineFirstInput);
+        targetState.settingsPanel.appendChild(onlineFirstLabel);
         targetState.minFairFightInput.addEventListener('input', applyFairFightFilter);
         targetState.maxFairFightInput.addEventListener('input', applyFairFightFilter);
+        targetState.onlineFirstInput.addEventListener('input', applyOnlineFirstSetting);
         updateFairFightInputs();
 
         targetState.grid = document.createElement('div');
@@ -1298,6 +1324,18 @@ const renderTargetGrid = (targets) => {
     const sortedTargets = visibleTargets
         .map((target, index) => ({ target, index }))
         .sort((first, second) => {
+            if (targetState.onlineFirst) {
+                const firstOnline =
+                    (first.target?.availability_status ?? '').toLowerCase() ===
+                    'online';
+                const secondOnline =
+                    (second.target?.availability_status ?? '').toLowerCase() ===
+                    'online';
+                if (firstOnline !== secondOnline) {
+                    return firstOnline ? -1 : 1;
+                }
+            }
+
             const firstState = getEffectiveState(first.target);
             const secondState = getEffectiveState(second.target);
             const firstGroup =
