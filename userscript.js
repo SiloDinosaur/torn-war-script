@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.5.0
+// @version      v1.5.1
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -168,6 +168,9 @@ const getHeaderTitle = ({ noActiveWar = false } = {}) => {
 };
 
 const parseFairFightValue = (value, fallback) => {
+    if (typeof value === 'string' && value.trim() === '') {
+        return fallback;
+    }
     const parsed = Number(value);
     if (!Number.isFinite(parsed)) {
         return fallback;
@@ -187,15 +190,14 @@ const updateFairFightInputs = () => {
 const applyFairFightFilter = () => {
     const nextMin = parseFairFightValue(
         targetState.minFairFightInput?.value,
-        targetState.minFairFight
+        DEFAULT_MIN_FAIR_FIGHT
     );
     const nextMax = parseFairFightValue(
         targetState.maxFairFightInput?.value,
-        targetState.maxFairFight
+        9999
     );
     targetState.minFairFight = Math.min(nextMin, nextMax);
     targetState.maxFairFight = Math.max(nextMin, nextMax);
-    updateFairFightInputs();
     setNoActiveWarHeaderState(headerState.noActiveWar);
     if (targetState.latestTargets.length > 0) {
         renderTargetGrid(targetState.latestTargets);
@@ -418,7 +420,7 @@ const ensureTargetStyles = () => {
             border: 1px solid #334155;
             border-radius: 6px;
             background: #0f172a;
-            width: fit-content;
+            width: 100%;
             max-width: 100%;
         }
 
@@ -1259,8 +1261,8 @@ const ensureTargetLayout = () => {
 
         targetState.settingsPanel.appendChild(minLabel);
         targetState.settingsPanel.appendChild(maxLabel);
-        targetState.minFairFightInput.addEventListener('change', applyFairFightFilter);
-        targetState.maxFairFightInput.addEventListener('change', applyFairFightFilter);
+        targetState.minFairFightInput.addEventListener('input', applyFairFightFilter);
+        targetState.maxFairFightInput.addEventListener('input', applyFairFightFilter);
         updateFairFightInputs();
 
         targetState.grid = document.createElement('div');
