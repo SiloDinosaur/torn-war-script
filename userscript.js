@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.4.2
+// @version      v1.5.0
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -15,7 +15,8 @@
 // ==/UserScript==
 
 // Feel free to modify these values
-const MAX_FAIR_FIGHT = 3.5;
+const DEFAULT_MIN_FAIR_FIGHT = 0;
+const DEFAULT_MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
 const TARGET_REFRESH_INTERVAL_MS = 15000;
@@ -50,6 +51,9 @@ const targetState = {
     cards: new Map(),
     grid: null,
     message: null,
+    settingsPanel: null,
+    minFairFightInput: null,
+    maxFairFightInput: null,
     calledFragments: new Set(),
     calledExactNames: new Set(),
     calledBy: new Map(),
@@ -60,6 +64,9 @@ const targetState = {
     parsedMessages: new Map(),
     lastKnownStates: new Map(),
     wrapper: null,
+    latestTargets: [],
+    minFairFight: DEFAULT_MIN_FAIR_FIGHT,
+    maxFairFight: DEFAULT_MAX_FAIR_FIGHT,
 };
 const chatState = {
     listObserver: null,
@@ -155,9 +162,44 @@ const toTimestampMs = (value) => {
 const getHeaderTitle = ({ noActiveWar = false } = {}) => {
     const baseTitle = `My Targets`;
     if (!noActiveWar) {
-        return `${baseTitle} | Max FF: ${MAX_FAIR_FIGHT}`;
+        return `${baseTitle} | FF: ${targetState.minFairFight}-${targetState.maxFairFight}`;
     }
     return `${baseTitle} | ${NO_ACTIVE_WAR_MESSAGE}`;
+};
+
+const parseFairFightValue = (value, fallback) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+        return fallback;
+    }
+    return Math.max(0, Math.round(parsed * 10) / 10);
+};
+
+const updateFairFightInputs = () => {
+    if (targetState.minFairFightInput) {
+        targetState.minFairFightInput.value = String(targetState.minFairFight);
+    }
+    if (targetState.maxFairFightInput) {
+        targetState.maxFairFightInput.value = String(targetState.maxFairFight);
+    }
+};
+
+const applyFairFightFilter = () => {
+    const nextMin = parseFairFightValue(
+        targetState.minFairFightInput?.value,
+        targetState.minFairFight
+    );
+    const nextMax = parseFairFightValue(
+        targetState.maxFairFightInput?.value,
+        targetState.maxFairFight
+    );
+    targetState.minFairFight = Math.min(nextMin, nextMax);
+    targetState.maxFairFight = Math.max(nextMin, nextMax);
+    updateFairFightInputs();
+    setNoActiveWarHeaderState(headerState.noActiveWar);
+    if (targetState.latestTargets.length > 0) {
+        renderTargetGrid(targetState.latestTargets);
+    }
 };
 
 const setNoActiveWarHeaderState = (isNoActiveWar) => {
@@ -366,6 +408,37 @@ const ensureTargetStyles = () => {
         .war-targets-message {
             font-size: 12px;
             color: #e5e7eb;
+        }
+
+        .war-targets-settings {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 8px;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            background: #0f172a;
+            width: fit-content;
+            max-width: 100%;
+        }
+
+        .war-targets-settings label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: #cbd5f5;
+            white-space: nowrap;
+        }
+
+        .war-targets-settings input {
+            width: 56px;
+            border: 1px solid #475569;
+            border-radius: 4px;
+            background: #020617;
+            color: #f8fafc;
+            font-size: 11px;
+            padding: 3px 4px;
         }
 
         .war-targets-api-key-form {
@@ -1165,9 +1238,35 @@ const ensureTargetLayout = () => {
         targetState.message = document.createElement('div');
         targetState.message.className = 'war-targets-message';
 
+        targetState.settingsPanel = document.createElement('div');
+        targetState.settingsPanel.className = 'war-targets-settings';
+
+        const minLabel = document.createElement('label');
+        minLabel.textContent = 'min FF';
+        targetState.minFairFightInput = document.createElement('input');
+        targetState.minFairFightInput.type = 'number';
+        targetState.minFairFightInput.step = '0.1';
+        targetState.minFairFightInput.min = '0';
+        minLabel.appendChild(targetState.minFairFightInput);
+
+        const maxLabel = document.createElement('label');
+        maxLabel.textContent = 'max FF';
+        targetState.maxFairFightInput = document.createElement('input');
+        targetState.maxFairFightInput.type = 'number';
+        targetState.maxFairFightInput.step = '0.1';
+        targetState.maxFairFightInput.min = '0';
+        maxLabel.appendChild(targetState.maxFairFightInput);
+
+        targetState.settingsPanel.appendChild(minLabel);
+        targetState.settingsPanel.appendChild(maxLabel);
+        targetState.minFairFightInput.addEventListener('change', applyFairFightFilter);
+        targetState.maxFairFightInput.addEventListener('change', applyFairFightFilter);
+        updateFairFightInputs();
+
         targetState.grid = document.createElement('div');
         targetState.grid.className = 'war-targets-grid';
 
+        targetState.wrapper.appendChild(targetState.settingsPanel);
         targetState.wrapper.appendChild(targetState.message);
         targetState.wrapper.appendChild(targetState.grid);
         content.appendChild(targetState.wrapper);
@@ -1182,11 +1281,17 @@ const renderTargetGrid = (targets) => {
         return;
     }
 
-    const visibleTargets = targets.filter(
-        (target) =>
-            Number.isFinite(target?.fair_fight) &&
-            target.fair_fight <= MAX_FAIR_FIGHT &&
-            !isAbroadHospitalTarget(target)
+    targetState.latestTargets = Array.isArray(targets) ? targets : [];
+    const visibleTargets = targetState.latestTargets.filter(
+        (target) => {
+            const fairFight = Number(target?.fair_fight);
+            return (
+                Number.isFinite(fairFight) &&
+                fairFight >= targetState.minFairFight &&
+                fairFight <= targetState.maxFairFight &&
+                !isAbroadHospitalTarget(target)
+            );
+        }
     );
     const sortedTargets = visibleTargets
         .map((target, index) => ({ target, index }))
