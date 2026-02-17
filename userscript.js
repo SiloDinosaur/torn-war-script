@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.6.0
+// @version      v1.6.1
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -429,6 +429,7 @@ const ensureTargetStyles = () => {
             border: 1px solid #334155;
             border-radius: 6px;
             background: #0f172a;
+            box-sizing: border-box;
             width: 100%;
             max-width: 100%;
         }
