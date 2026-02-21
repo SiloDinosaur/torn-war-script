@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.6.3
+// @version      v1.6.4
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -19,7 +19,8 @@ const DEFAULT_MIN_FAIR_FIGHT = 0;
 const DEFAULT_MAX_FAIR_FIGHT = 3.5;
 const LAST_N_MESSAGES_TO_CHECK_FOR_DIBS = 15;
 const CALL_FULFILLMENT_TIMEOUT_MINUTES = 15;
-const TARGET_REFRESH_INTERVAL_MS = 15000;
+const TARGET_REFRESH_INTERVAL_NOT_IN_WAR_MS = 15000;
+const TARGET_REFRESH_INTERVAL_IN_WAR_MS = 5000;
 const ENABLE_DEBUG_LOGS = false;
 
 // /////////////////////////////
@@ -44,6 +45,7 @@ const headerState = {
     lastUpdatedAt: null,
     lastUpdatedTimer: null,
     refreshTimer: null,
+    warStarted: false,
     isCollapsed: true,
     noActiveWar: false,
 };
@@ -1656,6 +1658,7 @@ const fetchEnemyFaction = async (key, currentFactionId) => {
     return {
         id: String(enemyFaction.id),
         name: enemyFaction?.name ?? '',
+        warStarted: !selected?.isUpcoming,
     };
 };
 
@@ -1733,15 +1736,22 @@ const loadTargets = async (key, options = {}) => {
     const factionInfo = await fetchFactionInfo(key);
     const enemyInfo = await fetchEnemyFaction(key, factionInfo?.id);
     if (!enemyInfo?.id) {
+        headerState.warStarted = false;
         headerState.lastUpdatedAt = null;
         setNoActiveWarHeaderState(true);
         return;
     }
+    headerState.warStarted = enemyInfo.warStarted === true;
     setNoActiveWarHeaderState(false);
     const targets = await fetchEnemyTargets(key, enemyInfo?.id, requestOptions);
     headerState.lastUpdatedAt = Date.now();
     renderTargetGrid(targets);
 };
+
+const getTargetRefreshIntervalMs = () =>
+    headerState.warStarted
+        ? TARGET_REFRESH_INTERVAL_IN_WAR_MS
+        : TARGET_REFRESH_INTERVAL_NOT_IN_WAR_MS;
 
 const updateLastUpdatedText = () => {
     const header = document.getElementById(HEADER_ELEMENT_ID);
@@ -1775,15 +1785,24 @@ const startLastUpdatedTimer = () => {
 
 const startAutoRefresh = (key) => {
     if (headerState.refreshTimer) {
-        clearInterval(headerState.refreshTimer);
+        clearTimeout(headerState.refreshTimer);
     }
 
-    headerState.refreshTimer = setInterval(() => {
-        loadTargets(key, { useScouter: false, showLoading: false }).catch((error) => {
-            logError('Auto-refresh failed.', { error });
-            setContentMessage('Unable to refresh targets.');
-        });
-    }, TARGET_REFRESH_INTERVAL_MS);
+    const runRefresh = () => {
+        loadTargets(key, { useScouter: false, showLoading: false })
+            .catch((error) => {
+                logError('Auto-refresh failed.', { error });
+                setContentMessage('Unable to refresh targets.');
+            })
+            .finally(() => {
+                headerState.refreshTimer = setTimeout(
+                    runRefresh,
+                    getTargetRefreshIntervalMs()
+                );
+            });
+    };
+
+    headerState.refreshTimer = setTimeout(runRefresh, getTargetRefreshIntervalMs());
 };
 
 const verifyApiKey = (key) => {
