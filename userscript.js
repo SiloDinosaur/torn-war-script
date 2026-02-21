@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.6.5
+// @version      v1.6.6
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -1911,7 +1911,12 @@ function renderNewElements() {
             setTimeout(initialize, 500);
             return;
         }
-        verifyApiKey(getStoredApiKey());
+        const storedApiKey = getStoredApiKey();
+        if (!storedApiKey) {
+            headerState.isCollapsed = false;
+            setNoActiveWarHeaderState(headerState.noActiveWar);
+        }
+        verifyApiKey(storedApiKey);
     };
 
     setTimeout(initialize, 1000);
