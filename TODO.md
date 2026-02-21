@@ -1,1 +1,4 @@
-The collapsed bar could also work as a notification bar if like your target is up next, or your target has self hosped, or upon calling your planned target is under called status or over 15 mins
+- The collapsed bar could also work as a notification bar if like your target is up next, or your target has self hosped, or upon calling your planned target is under called status or over 15 mins
+- Ability to "recall" your targets. If it's already yours, add a "Recall" button to send "<targetname> recall" into the chat
+- Make the script work without "in", so "<targetName> <numberOfMinutes>" should make a target called too
+- If message starts like "<targetname> in <minutes>", handle it (e.g. "slenky in 5 if not called before")
