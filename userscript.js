@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Torn War Targets
 // @namespace    https://www.torn.com/factions.php
-// @version      v1.6.2
+// @version      v1.6.3
 // @description  Adds a box with possible targets to faction page
 // @author       Maahly [3893095]
 // @match        https://www.torn.com/factions.php?step=your*
@@ -1063,7 +1063,7 @@ const extractCallEntry = (message) => {
     }
 
     const { callerName, messagePart, isSelf } = messageParts;
-    const match = messagePart.match(/^([a-z0-9]+)(?:\s+in\s+\d+)?(?:[.!?,])?$/i);
+    const match = messagePart.match(/^([a-z0-9_]+)(?:\s+in\s+\d+)?(?:[.!?,])?$/i);
     if (!match) {
         logDebug('Skipping call extraction: message part did not match fragment pattern.', {
             callerName,
